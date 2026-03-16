@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -14,6 +15,10 @@ app = FastAPI()
 async def get():
     with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 class IPRequest(BaseModel):
     ip: str
@@ -175,4 +180,5 @@ async def websocket_endpoint(websocket: WebSocket, ip: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
