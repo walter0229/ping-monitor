@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP 실시간 모니터링 (Ping & Traceroute PRO)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+        .ping-bar-container {
+            display: flex;
+            align-items: center;
+            height: 1.5rem;
+            width: 100%;
+            background-color: #334155;
+            border-radius: 0.25rem;
+            overflow: hidden;
+            position: relative;
+        }
+        .ping-bar {
+            height: 100%;
+            background-color: #10b981;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+        .ping-text {
+            position: absolute;
+            left: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+            z-index: 10;
+        }
+        .ip-label {
+            font-size: 0.7rem;
+            color: #60a5fa;
+            font-weight: bold;
+            display: block;
+            margin-top: 0.1rem;
+        }
+        /* Report Modal Styles */
+        #reportModal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px); /* Safari 지원 */
+        }
+        .report-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 2px solid #FFD700;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.2);
+            width: 90%;
+            max-width: 600px;
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+        }
+
+        /* Fancy EXANET Title Stylings */
+        .fancy-title {
+            font-family: 'Outfit', 'Inter', sans-serif;
+            font-weight: 900;
+            letter-spacing: -0.05em;
+            background: linear-gradient(to bottom, #FFD700 20%, #FFF8A3 45%, #FFD700 50%, #B8860B 85%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.4));
+            position: relative;
+            display: inline-block;
+        }
+        .fancy-title::after {
+            content: "EXANET";
+            position: absolute;
+            left: 0; top: 0;
+            z-index: -1;
+            -webkit-text-stroke: 4px rgba(255, 215, 0, 0.1);
+            filter: blur(8px);
+        }
+        .header-subtitle {
+            background: linear-gradient(to right, #94a3b8, #cbd5e1);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+        }
+        /* Custom Dropdown Styles */
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            margin-top: 0.5rem;
+            z-index: 100;
+            max-height: 400px;
+            overflow-y: auto;
+            box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.8);
+        }
+        .dropdown-content.show { display: block; }
+        .dropdown-item {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .dropdown-item:last-child { border-bottom: none; }
+        .dropdown-item:hover { background-color: #334155; }
+        .dropdown-header {
+            padding: 0.5rem 1rem;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #64748b;
+            background: rgba(15, 23, 42, 0.5);
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@900&display=swap" rel="stylesheet">
+</head>
+<body class="min-h-screen p-6 flex flex-col gap-6">
+
+    <!-- Header Title Area -->
+    <div class="flex flex-col items-center text-center mt-4 mb-2">
+        <h1 class="text-5xl md:text-6xl mb-2">
+            <span class="fancy-title">EXANET</span>
+            <span class="header-subtitle ml-2 text-2xl md:text-3xl">Ping & Trace route Moniter</span>
+        </h1>
+        <p class="text-slate-400 text-sm tracking-widest uppercase font-medium">Professional Network Monitoring Pro Solutions</p>
+    </div>
+
+    <!-- 상단 입력 영역: IP 입력 및 드롭다운 -->
+    <div class="glass-panel p-6 mb-8 relative z-50">
+        <div class="flex flex-col md:flex-row gap-4 items-center">
+            <div class="relative w-full md:w-64 group flex gap-2">
+                <div class="relative flex-grow">
+                    <div id="customDropdown" class="w-full bg-slate-800 border-2 border-slate-700 text-slate-300 px-4 py-4 rounded-xl focus-within:border-blue-500 outline-none transition-all cursor-pointer relative font-semibold tracking-wide shadow-lg group-hover:border-slate-600 flex justify-between items-center">
+                        <span id="dropdownSelectedText">Quick Select 🔽</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                    <div id="dropdownContent" class="dropdown-content">
+                        <div class="dropdown-header">Default Presets</div>
+                        <div class="dropdown-item" onclick="selectIp('168.126.63.1', 'KT Kornet')" oncontextmenu="showContextMenu(event, '168.126.63.1', true)">KT Kornet (168.126.63.1)</div>
+                        <div class="dropdown-item" onclick="selectIp('210.220.163.82', 'SK Broadband')" oncontextmenu="showContextMenu(event, '210.220.163.82', true)">SK Broadband (210.220.163.82)</div>
+                        <div class="dropdown-item" onclick="selectIp('164.124.101.2', 'LG U+')" oncontextmenu="showContextMenu(event, '164.124.101.2', true)">LG U+ (164.124.101.2)</div>
+                        <div class="dropdown-item" onclick="selectIp('8.8.8.8', 'Google DNS')" oncontextmenu="showContextMenu(event, '8.8.8.8', true)">Google DNS (8.8.8.8)</div>
+                        <div class="dropdown-item" onclick="selectIp('1.1.1.1', 'Cloudflare')" oncontextmenu="showContextMenu(event, '1.1.1.1', true)">Cloudflare (1.1.1.1)</div>
+                        
+                        <div class="dropdown-header">My Custom IPs</div>
+                        <div id="customIpItems">
+                            <!-- Custom IPs inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="relative flex-grow w-full group flex gap-2">
+                <div class="relative flex-grow">
+                    <input type="text" id="ipInput" placeholder="Enter Target IP (e.g. 8.8.8.8)" 
+                        class="w-full bg-slate-800 border-2 border-slate-700 text-white px-6 py-4 rounded-xl focus:border-blue-500 outline-none transition-all font-mono text-lg shadow-lg group-hover:border-slate-600">
+                    <div class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                    </div>
+                </div>
+                <button onclick="addCustomIp()" title="Add to Quick Select" class="p-4 bg-slate-700 hover:bg-slate-600 text-blue-400 rounded-xl transition-all border border-slate-600 shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                </button>
+            </div>
+            <button id="startBtn" onclick="toggleMonitoring()" 
+                    class="w-full md:w-48 bg-[#FFD700] hover:bg-[#FFC000] text-black font-bold py-4 rounded-xl transition-all shadow-lg shadow-yellow-500/20 text-lg flex items-center justify-center gap-2 border-b-4 border-[#B8860B] active:border-b-0 active:translate-y-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Monitoring 시작
+            </button>
+        </div>
+    </div>
+
+    <!-- 1행: IP 정보 & 지도 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="glass-panel p-6 lg:col-span-2">
+            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2"><span class="w-2 h-6 bg-blue-500 rounded-full inline-block"></span> 1. IP 상세 정보</h2>
+            <div id="ipInfoBox" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div class="bg-slate-800 p-4 rounded-lg"><p class="text-slate-400 text-sm">국가</p><p id="infoCountry" class="text-lg font-semibold">-</p></div>
+                <div class="bg-slate-800 p-4 rounded-lg"><p class="text-slate-400 text-sm">지역</p><p id="infoRegion" class="text-lg font-semibold">-</p></div>
+                <div class="bg-slate-800 p-4 rounded-lg"><p class="text-slate-400 text-sm">도시</p><p id="infoCity" class="text-lg font-semibold">-</p></div>
+                <div class="bg-slate-800 p-4 rounded-lg"><p class="text-slate-400 text-sm">우편번호</p><p id="infoZip" class="text-lg font-semibold">-</p></div>
+                <div class="bg-slate-800 p-4 rounded-lg"><p class="text-slate-400 text-sm">위도</p><p id="infoLat" class="text-lg font-semibold">-</p></div>
+                <div class="bg-slate-800 p-4 rounded-lg"><p class="text-slate-400 text-sm">경도</p><p id="infoLon" class="text-lg font-semibold">-</p></div>
+                <div class="bg-slate-800 p-4 rounded-lg md:col-span-2 lg:col-span-1"><p class="text-slate-400 text-sm">ISP</p><p id="infoIsp" class="text-lg font-semibold text-xs">-</p></div>
+                <div class="bg-slate-800 p-4 rounded-lg md:col-span-2 lg:col-span-1"><p class="text-slate-400 text-sm">AS</p><p id="infoAs" class="text-lg font-semibold text-xs">-</p></div>
+            </div>
+        </div>
+        <div class="glass-panel p-4 flex flex-col gap-3">
+            <h2 class="text-lg font-semibold flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" /></svg> 위치 지도 (Location)</h2>
+            <div class="relative w-full h-full min-h-[200px] bg-slate-800 rounded-xl overflow-hidden shadow-inner">
+                <iframe id="googleMap" title="IP Location Map" class="w-full h-full border-0 absolute inset-0" src="about:blank" allowfullscreen loading="lazy"></iframe>
+                <div id="mapPlaceholder" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm bg-slate-800">지리 데이터 대기 중...</div>
+            </div>
+            <a id="externalMapLink" href="#" target="_blank" class="text-center text-xs text-blue-400 hover:text-blue-300 transition-colors hidden font-semibold bg-slate-800/50 py-2 rounded-lg border border-slate-700">Google 지도에서 크게 보기 &rarr;</a>
+        </div>
+    </div>
+
+    <!-- 2행: 지속적 리얼타임 Ping & 통계 -->
+    <div class="glass-panel p-6 flex flex-col gap-4">
+        <h2 class="text-xl font-semibold flex items-center gap-2"><span class="w-2 h-6 bg-emerald-500 rounded-full inline-block"></span> 2. 실시간 Ping 상태 및 통계</h2>
+        <div class="h-64 relative w-full">
+            <canvas id="pingChart"></canvas>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+            <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700 text-center">
+                <p class="text-slate-400 text-xs">전송 (Sent)</p><p id="statSent" class="text-xl font-mono font-bold text-blue-400">0</p>
+            </div>
+            <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700 text-center">
+                <p class="text-slate-400 text-xs">수신 (Received)</p><p id="statReceived" class="text-xl font-mono font-bold text-emerald-400">0</p>
+            </div>
+            <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700 text-center">
+                <p class="text-slate-400 text-xs">손실률 (Loss %)</p><p id="statLoss" class="text-xl font-mono font-bold text-rose-500">0%</p>
+            </div>
+            <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700 text-center">
+                <p class="text-slate-400 text-xs">최고 (Max)</p><p id="statMax" class="text-xl font-mono font-bold text-rose-400">0 ms</p>
+            </div>
+            <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700 text-center">
+                <p class="text-slate-400 text-xs">최저 (Min)</p><p id="statMin" class="text-xl font-mono font-bold text-cyan-400">0 ms</p>
+            </div>
+            <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700 text-center">
+                <p class="text-slate-400 text-xs">평균 (Avg)</p><p id="statAvg" class="text-xl font-mono font-bold text-amber-400">0 ms</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3행: 병렬 Traceroute -->
+    <div class="glass-panel p-6 flex flex-col flex-1">
+        <h2 class="text-xl font-semibold mb-4 flex items-center gap-2"><span class="w-2 h-6 bg-purple-500 rounded-full inline-block"></span> 3. 병렬 Traceroute 라우팅 경로 실시간 모니터링</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-700 text-slate-400 text-sm">
+                        <th class="py-3 px-4 w-16 text-center">Hop</th>
+                        <th class="py-3 px-4 w-48">IP Address</th>
+                        <th class="py-3 px-4">지연 시간 (Latency)</th>
+                    </tr>
+                </thead>
+                <tbody id="tracertTbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 핑 결과 리포트 모달 -->
+    <div id="reportModal">
+        <div class="report-card">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-[#FFD700]">PING REPORT</h3>
+                <button onclick="closeReport()" class="text-slate-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+                        <p class="text-slate-400 text-[10px] uppercase tracking-wider mb-1">발신 IP (Source)</p>
+                        <p id="reportSourceIp" class="text-white font-mono text-sm font-bold">Detecting...</p>
+                    </div>
+                    <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+                        <p class="text-slate-400 text-[10px] uppercase tracking-wider mb-1">대상 IP (Target)</p>
+                        <p id="reportTargetIp" class="text-white font-mono text-sm font-bold">-</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+                        <p class="text-slate-400 text-[10px] uppercase tracking-wider mb-1">시작 시각</p>
+                        <p id="reportStart" class="text-white font-mono text-xs">-</p>
+                    </div>
+                    <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700">
+                        <p class="text-slate-400 text-[10px] uppercase tracking-wider mb-1">종료 시각</p>
+                        <p id="reportEnd" class="text-white font-mono text-xs">-</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 text-center flex flex-col justify-center">
+                        <p class="text-slate-500 text-[10px] uppercase tracking-wider mb-2">Sent/Recv</p>
+                        <p id="reportPkts" class="text-lg font-bold text-white">-</p>
+                    </div>
+                    <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 text-center flex flex-col justify-center">
+                        <p class="text-slate-500 text-[10px] uppercase tracking-wider mb-2">Loss Rate</p>
+                        <p id="reportLoss" class="text-lg font-bold text-rose-500">-</p>
+                    </div>
+                    <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 text-center flex flex-col justify-center">
+                        <p class="text-slate-500 text-[10px] uppercase tracking-wider mb-2">Avg Latency</p>
+                        <p id="reportAvg" class="text-lg font-bold text-amber-500">-</p>
+                    </div>
+                </div>
+                
+                <!-- 푸터 버튼 영역 -->
+                <div class="pt-6 border-t border-slate-700/50 mt-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <button onclick="copyToClipboard()" class="flex flex-col items-center justify-center py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all h-16 border border-slate-700 shadow-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                            <span class="text-[10px]">결과 텍스트 복사</span>
+                        </button>
+                        <button onclick="closeReport()" class="bg-[#FFD700] hover:bg-[#FFC000] text-black font-bold rounded-xl transition-all shadow-lg shadow-yellow-500/30 flex items-center justify-center text-lg h-16">
+                            확인 및 닫기
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="contextMenu" class="hidden fixed bg-slate-800 border-2 border-slate-600 rounded-xl shadow-2xl z-[300] overflow-hidden min-w-[140px] backdrop-blur-md">
+        <button onclick="editSelectedIp()" class="w-full text-left px-5 py-3 text-sm text-slate-200 hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            IP 편집
+        </button>
+        <button onclick="deleteSelectedIp()" class="w-full text-left px-5 py-3 text-sm text-rose-400 hover:bg-rose-600 hover:text-white transition-all flex items-center gap-2 border-t border-slate-700">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            IP 삭제
+        </button>
+    </div>
+
+    <script>
+        let ws = null;
+        let pingChart;
+        let chartData = { labels: [], datasets: [{ label: 'Ping (ms)', data: [], borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)', borderWidth: 2, tension: 0.4, fill: true }] };
+        let stats = { sent: 0, received: 0, max: -Infinity, min: Infinity, sum: 0, startTime: null, endTime: null, sourceIp: 'Detecting...' };
+
+        function resetStats() {
+            // 시간 정보는 유지하고 통계 데이터만 초기화
+            stats.sent = 0;
+            stats.received = 0;
+            stats.max = -Infinity;
+            stats.min = Infinity;
+            stats.sum = 0;
+            
+            document.getElementById('statSent').innerText = '0';
+            document.getElementById('statReceived').innerText = '0';
+            document.getElementById('statLoss').innerText = '0%';
+            document.getElementById('statMax').innerText = '0 ms';
+            document.getElementById('statMin').innerText = '0 ms';
+            document.getElementById('statAvg').innerText = '0 ms';
+        }
+
+        function updateStatsUI(ms, status) {
+            stats.sent++;
+            if (status === "Success") {
+                stats.received++;
+                stats.sum += ms;
+                if (ms > stats.max) stats.max = ms;
+                if (ms < stats.min) stats.min = ms;
+                
+                document.getElementById('statReceived').innerText = stats.received;
+                document.getElementById('statMax').innerText = `${stats.max} ms`;
+                document.getElementById('statMin').innerText = `${stats.min} ms`;
+                document.getElementById('statAvg').innerText = `${(stats.sum / stats.received).toFixed(1)} ms`;
+            }
+            
+            // 손실률 계산
+            const lossRate = ((stats.sent - stats.received) / stats.sent * 100).toFixed(1);
+            document.getElementById('statLoss').innerText = `${lossRate}%`;
+            document.getElementById('statSent').innerText = stats.sent;
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('pingChart').getContext('2d');
+            if (pingChart) pingChart.destroy();
+            pingChart = new Chart(ctx, {
+                type: 'line',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { display: false }, y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#94a3b8' } } },
+                    plugins: { legend: { display: false } },
+                    animation: { duration: 0 }
+                }
+            });
+        }
+        initChart();
+
+        async function fetchIpInfo(ip) {
+            try {
+                const res = await fetch('/api/ipinfo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ip })
+                });
+                const data = await res.json();
+                if (data.error) { alert(data.error); return; }
+                document.getElementById('infoCountry').innerText = data.country || '-';
+                document.getElementById('infoRegion').innerText = data.regionName || '-';
+                document.getElementById('infoCity').innerText = data.city || '-';
+                document.getElementById('infoZip').innerText = data.zip || '-';
+                document.getElementById('infoLat').innerText = data.lat || '-';
+                document.getElementById('infoLon').innerText = data.lon || '-';
+                document.getElementById('infoIsp').innerText = data.isp || '-';
+                document.getElementById('infoAs').innerText = data.as || '-';
+
+                // 구글 지도 업데이트
+                if (data.lat && data.lon) {
+                    const mapUrl = `https://maps.google.com/maps?q=${data.lat},${data.lon}&z=15&output=embed`;
+                    document.getElementById('googleMap').src = mapUrl;
+                    document.getElementById('mapPlaceholder').classList.add('hidden');
+                    const externalLink = document.getElementById('externalMapLink');
+                    externalLink.href = `https://www.google.com/maps/search/?api=1&query=${data.lat},${data.lon}`;
+                    externalLink.classList.remove('hidden');
+                } else {
+                    document.getElementById('googleMap').src = 'about:blank';
+                    document.getElementById('mapPlaceholder').classList.remove('hidden');
+                    document.getElementById('externalMapLink').classList.add('hidden');
+                }
+            } catch (e) { console.error('IP Info error:', e); }
+        }
+
+        function renderTracertRow(hop, ip, ms = 0) {
+            let tr = document.getElementById(`hop-${hop}`);
+            if (!tr) {
+                tr = document.createElement('tr');
+                tr.id = `hop-${hop}`;
+                tr.className = 'border-b border-slate-700/50 hover:bg-slate-800/50';
+                
+                // IP 범위 체크 함수
+                const ipToNum = (ip) => ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+                const ipNum = ipToNum(ip);
+                
+                let ipDisplay = ip;
+                const goldClass = "text-xs font-bold text-[#FFD700] block mt-1"; // 골드색 통일
+
+                // VNPT & CMC 대역 -> EXANET CISCO
+                const vnptStart = ipToNum("14.238.156.209"), vnptEnd = ipToNum("14.238.156.220");
+                const cmcStart = ipToNum("45.122.241.145"), cmcEnd = ipToNum("45.122.241.150");
+
+                if ((ipNum >= vnptStart && ipNum <= vnptEnd) || (ipNum >= cmcStart && ipNum <= cmcEnd)) {
+                    ipDisplay = `<div>${ip}<span class="${goldClass}">EXANET CISCO</span></div>`;
+                } 
+                // 개별 IP 처리
+                else if (ip === "172.16.20.1" || ip === "172.16.60.1") {
+                    ipDisplay = `<div>${ip}<span class="${goldClass}">EXANET VPN Server</span></div>`;
+                } else if (ip === "172.30.11.65") {
+                    ipDisplay = `<div>${ip}<span class="${goldClass}">EXANET HongKong</span></div>`;
+                } else if (ip === "172.29.1.1") {
+                    ipDisplay = `<div>${ip}<span class="${goldClass}">EXANET KOREA</span></div>`;
+                }
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-center text-slate-400 font-mono">${hop}</td>
+                    <td class="py-3 px-4 font-mono text-sm">${ipDisplay}</td>
+                    <td class="py-3 px-4 w-full">
+                        <div class="ping-bar-container">
+                            <span class="ping-text" id="hop-text-${hop}">추적 중...</span>
+                            <div class="ping-bar" id="hop-bar-${hop}" style="width: 0%; background-color:#64748b;"></div>
+                        </div>
+                    </td>
+                `;
+                document.getElementById('tracertTbody').appendChild(tr);
+            }
+            if (ms !== 0) {
+                const bar = document.getElementById(`hop-bar-${hop}`);
+                const text = document.getElementById(`hop-text-${hop}`);
+                
+                let val = ms;
+                if (ms === -1) {
+                    bar.style.width = '100%';
+                    bar.style.backgroundColor = '#ef4444';
+                    text.innerText = 'Timeout';
+                } else {
+                    bar.style.width = `${Math.min((ms / 500) * 100, 100)}%`;
+                    text.innerText = `${ms} ms`;
+                    if (ms <= 65) bar.style.backgroundColor = '#3b82f6'; // 파란색
+                    else if (ms < 150) bar.style.backgroundColor = '#eab308';
+                    else bar.style.backgroundColor = '#ef4444';
+                }
+            }
+        }
+
+        function stopMonitoring() {
+            if (ws) {
+                ws.onclose = null;
+                ws.close();
+            }
+            stats.endTime = new Date();
+            const btn = document.getElementById('startBtn'); // Changed from startStopBtn
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Monitoring 시작`;
+            btn.classList.remove('bg-red-600', 'hover:bg-red-500', 'shadow-red-500/30', 'border-b-4', 'border-red-800', 'active:border-b-0', 'active:translate-y-1');
+            btn.classList.add('bg-[#FFD700]', 'hover:bg-[#FFC000]', 'shadow-yellow-500/20', 'border-b-4', 'border-[#B8860B]', 'active:border-b-0', 'active:translate-y-1');
+            btn.onclick = startMonitoring; // Re-assign start function
+        }
+
+        function showReport() {
+            if (!stats.startTime) return;
+            if (!stats.endTime) stats.endTime = new Date();
+            
+            const formatDate = (date) => {
+                try {
+                    return date.getFullYear() + '-' + 
+                           String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                           String(date.getDate()).padStart(2, '0') + ' ' + 
+                           String(date.getHours()).padStart(2, '0') + ':' + 
+                           String(date.getMinutes()).padStart(2, '0') + ':' + 
+                           String(date.getSeconds()).padStart(2, '0');
+                } catch(e) { return "-"; }
+            };
+
+            document.getElementById('reportStart').innerText = formatDate(stats.startTime);
+            document.getElementById('reportEnd').innerText = formatDate(stats.endTime);
+            document.getElementById('reportTargetIp').innerText = document.getElementById('ipInput').value || "Unknown";
+            document.getElementById('reportSourceIp').innerText = stats.sourceIp;
+            document.getElementById('reportPkts').innerText = `${stats.sent} / ${stats.received}`;
+            
+            const lossRate = stats.sent > 0 ? ((stats.sent - stats.received) / stats.sent * 100).toFixed(1) : "0.0";
+            document.getElementById('reportLoss').innerText = `${lossRate}%`;
+            
+            const avg = stats.received > 0 ? (stats.sum / stats.received).toFixed(1) : "0.0";
+            document.getElementById('reportAvg').innerText = `${avg} ms`;
+
+            document.getElementById('reportModal').style.display = 'flex';
+        }
+
+
+        function closeReport() {
+            document.getElementById('reportModal').style.display = 'none';
+        }
+
+        function getReportText() {
+            const sourceIp = document.getElementById('reportSourceIp').innerText;
+            const targetIp = document.getElementById('reportTargetIp').innerText;
+            const start = document.getElementById('reportStart').innerText;
+            const end = document.getElementById('reportEnd').innerText;
+            const pkts = document.getElementById('reportPkts').innerText;
+            const loss = document.getElementById('reportLoss').innerText;
+            const avg = document.getElementById('reportAvg').innerText;
+
+            // IP 주소를 링크로 인식하지 못하도록 마침표 사이에 공백 추가
+            const cleanSource = sourceIp.replace(/\./g, ' . ');
+            const cleanTarget = targetIp.replace(/\./g, ' . ');
+
+            return `[EXANET PING REPORT]\n\n` +
+                   `발신 시작시간(Thời gian bắt đầu) : ${start}\n` +
+                   `발신 종료시간(Thời gian kết thúc) : ${end}\n` +
+                   `발신 IP (IP Nguồn (Source)) : ${cleanSource}\n` +
+                   `대상 IP (IP Đích (Destination)) : ${cleanTarget}\n` +
+                   `발신 갯수(Số lượng gói tin (Sent)) : ${pkts} (Packets)\n` +
+                   `손실률(Tỉ lệ mất gói (Loss)) : ${loss}\n` +
+                   `평균 응답 시간(Thời gian phản hồi trung bình) : ${avg}`;
+        }
+
+        function copyToClipboard() {
+            const text = getReportText();
+            navigator.clipboard.writeText(text).then(() => {
+                alert("리포트 결과가 클립보드에 복사되었습니다.");
+            }).catch(err => {
+                console.error("Copy failed:", err);
+            });
+        }
+
+        // Enter 키 지원
+        document.getElementById('ipInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') toggleMonitoring();
+        });
+
+        // 퀵 선택 드롭다운 연동 삭제 (커스텀 드롭다운으로 대체됨)
+
+        // 사용자 정의 IP 관리 기능
+        function addCustomIp() {
+            const ip = document.getElementById('ipInput').value.trim();
+            if (!ip) return;
+            
+            let customIps = JSON.parse(localStorage.getItem('customIps') || '[]');
+            if (!customIps.includes(ip)) {
+                customIps.push(ip);
+                localStorage.setItem('customIps', JSON.stringify(customIps));
+                updateQuickSelectUI();
+                alert(`Added to Custom IPs: ${ip}`);
+            } else {
+                alert("Already in custom list.");
+            }
+        }
+
+        function updateQuickSelectUI() {
+            const customIpItems = document.getElementById('customIpItems');
+            customIpItems.innerHTML = '';
+            const customIps = JSON.parse(localStorage.getItem('customIps') || '[]');
+            
+            if (customIps.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'px-4 py-3 text-slate-500 text-xs italic';
+                empty.innerText = 'No custom IPs added yet.';
+                customIpItems.appendChild(empty);
+            } else {
+                customIps.forEach(ip => {
+                    const div = document.createElement('div');
+                    div.className = 'dropdown-item flex justify-between items-center group/item';
+                    div.innerHTML = `<span>${ip}</span>`;
+                    div.onclick = () => selectIp(ip);
+                    div.oncontextmenu = (e) => showContextMenu(e, ip);
+                    customIpItems.appendChild(div);
+                });
+            }
+        }
+        updateQuickSelectUI();
+
+        // Custom Dropdown Logic
+        const customDropdown = document.getElementById('customDropdown');
+        const dropdownContent = document.getElementById('dropdownContent');
+        const contextMenu = document.getElementById('contextMenu');
+        let rightClickedIp = null;
+        let isPreset = false;
+
+        customDropdown.onclick = (e) => {
+            e.stopPropagation();
+            dropdownContent.classList.toggle('show');
+            contextMenu.classList.add('hidden');
+        };
+
+        function selectIp(ip, label = "") {
+            document.getElementById('ipInput').value = ip;
+            document.getElementById('dropdownSelectedText').innerText = label ? `${label} (${ip})` : ip;
+            dropdownContent.classList.remove('show');
+            startMonitoring();
+        }
+
+        function showContextMenu(e, ip, preset = false) {
+            e.preventDefault();
+            e.stopPropagation();
+            rightClickedIp = ip;
+            isPreset = preset;
+            
+            contextMenu.style.left = `${e.clientX}px`;
+            contextMenu.style.top = `${e.clientY}px`;
+            contextMenu.classList.remove('hidden');
+            dropdownContent.classList.remove('show');
+        }
+
+        function editSelectedIp() {
+            if (!rightClickedIp) return;
+            if (isPreset) {
+                alert("기본 프리셋은 편집할 수 없습니다. 대신 Custom IP로 추가해 주세요.");
+                contextMenu.classList.add('hidden');
+                return;
+            }
+            const newIp = prompt("IP 주소를 수정하세요:", rightClickedIp);
+            if (newIp && newIp !== rightClickedIp) {
+                let customIps = JSON.parse(localStorage.getItem('customIps') || '[]');
+                const index = customIps.indexOf(rightClickedIp);
+                if (index !== -1) {
+                    customIps[index] = newIp;
+                    localStorage.setItem('customIps', JSON.stringify(customIps));
+                    updateQuickSelectUI();
+                }
+            }
+            contextMenu.classList.add('hidden');
+        }
+
+        function deleteSelectedIp() {
+            if (!rightClickedIp) return;
+            if (isPreset) {
+                alert("기본 프리셋은 삭제할 수 없습니다.");
+                contextMenu.classList.add('hidden');
+                return;
+            }
+            if (confirm(`${rightClickedIp}를 삭제하시겠습니까?`)) {
+                let customIps = JSON.parse(localStorage.getItem('customIps') || '[]');
+                const index = customIps.indexOf(rightClickedIp);
+                if (index !== -1) {
+                    customIps.splice(index, 1);
+                    localStorage.setItem('customIps', JSON.stringify(customIps));
+                    updateQuickSelectUI();
+                }
+            }
+            contextMenu.classList.add('hidden');
+        }
+
+        document.onclick = () => {
+            dropdownContent.classList.remove('show');
+            contextMenu.classList.add('hidden');
+        };
+
+        async function fetchSourceIp() {
+            try {
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                stats.sourceIp = data.ip;
+            } catch (e) {
+                stats.sourceIp = "Unknown";
+            }
+        }
+
+        function toggleMonitoring() {
+            const btn = document.getElementById('startBtn');
+            if (btn.innerText.includes('시작')) {
+                startMonitoring();
+            } else {
+                stopMonitoring();
+                showReport();
+            }
+        }
+
+        function startMonitoring() {
+            const ip = document.getElementById('ipInput').value.trim();
+            if (!ip) return;
+
+            // 1. 통계 초기화 먼저 수행
+            resetStats();
+            // 2. 새로운 세션 시간 기록
+            stats.startTime = new Date();
+            stats.endTime = null;
+            fetchSourceIp(); // 발신 IP 획득 시도
+
+            const btn = document.getElementById('startBtn');
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg> Monitoring 정지`;
+            btn.classList.remove('bg-[#FFD700]', 'hover:bg-[#FFC000]', 'shadow-yellow-500/20', 'border-[#B8860B]');
+            btn.classList.add('bg-red-600', 'hover:bg-red-500', 'shadow-red-500/30', 'border-red-800', 'text-white');
+            btn.onclick = toggleMonitoring;
+
+            fetchIpInfo(ip);
+            chartData.labels = []; chartData.datasets[0].data = [];
+            document.getElementById('tracertTbody').innerHTML = '';
+            
+            if (ws) {
+                ws.onclose = null; // 이전 핸들러 제거로 시작 버튼 복구 방지
+                ws.close();
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host || '127.0.0.1:8000';
+            ws = new WebSocket(`${protocol}//${host}/ws/${ip}`);
+            
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'ping') {
+                    updateStatsUI(msg.ms, msg.status);
+                    chartData.labels.push(""); chartData.datasets[0].data.push(msg.ms);
+                    if (chartData.labels.length > 50) { chartData.labels.shift(); chartData.datasets[0].data.shift(); }
+                    pingChart.update();
+                } else if (msg.type === 'tracert_hop' || msg.type === 'hop_ping_update') {
+                    renderTracertRow(msg.hop, msg.ip, msg.ms || 0);
+                }
+            };
+
+            ws.onerror = (err) => {
+                console.error("WebSocket Error:", err);
+            };
+
+            ws.onclose = () => {
+                console.log("WebSocket Closed");
+                stopMonitoring();
+            };
+        }
+    </script>
+</body>
+</html>

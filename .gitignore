@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+uv.exe
+uv.zip
+uvw.exe
+uvx.exe
+수정사항/
