@@ -1,12 +1,13 @@
 import asyncio
 import json
 import os
+import re
+import shutil
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import httpx
 import platform
-import re
 
 app = FastAPI()
 
@@ -22,6 +23,12 @@ async def get_index():
 @app.head("/health")
 async def health():
     return {"status": "ok"}
+
+# 시스템 명령어 존재 여부 확인
+PING_CMD = shutil.which("ping")
+TRACERT_CMD = shutil.which("tracert") or shutil.which("traceroute")
+
+print(f"System Check: PING_CMD={PING_CMD}, TRACERT_CMD={TRACERT_CMD}")
 
 class IPRequest(BaseModel):
     ip: str
@@ -52,20 +59,34 @@ async def get_ip_info(request: IPRequest):
 
 async def ping_loop(websocket: WebSocket, ip: str):
     """지속적으로 ping을 보내고 결과를 웹소켓으로 전송 (1초 간격)"""
-    is_windows = platform.system().lower() == "windows"
-    
+    if not PING_CMD:
+        await websocket.send_json({"type": "ping", "ms": 0, "status": "Error: ping command not found"})
+        return
+
     while True:
         try:
+            is_windows = platform.system().lower() == "windows"
             if is_windows:
                 cmd = ["ping", "-n", "1", "-w", "1000", ip]
             else:
+                # 리눅스 환경에서는 -W가 초 단위임 (1 = 1초)
                 cmd = ["ping", "-c", "1", "-W", "1", ip]
             
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+            except FileNotFoundError:
+                print(f"Error: Ping command not found at {PING_CMD}. Please ensure it's in your PATH.")
+                await websocket.send_json({"type": "ping", "ms": 0, "status": "Error: ping command not found"})
+                break
+            except Exception as e:
+                print(f"Error starting ping subprocess for {ip}: {e}")
+                await websocket.send_json({"type": "ping", "ms": 0, "status": f"Error: Failed to start ping ({e})"})
+                break
+
             stdout, stderr = await process.communicate()
             output = stdout.decode("cp949" if is_windows else "utf-8", errors="ignore")
             error_output = stderr.decode("cp949" if is_windows else "utf-8", errors="ignore")
@@ -79,7 +100,7 @@ async def ping_loop(websocket: WebSocket, ip: str):
                 ms = 0
                 status = "Timeout"
                 if error_output:
-                    print(f"Ping Command Error: {error_output.strip()}")
+                    print(f"Ping Command Error for {ip}: {error_output.strip()}")
             
             await websocket.send_json({
                 "type": "ping",
@@ -90,11 +111,15 @@ async def ping_loop(websocket: WebSocket, ip: str):
         except asyncio.CancelledError:
             break
         except Exception as e:
-            print(f"Ping loop general error: {e}")
+            print(f"Ping loop general error for {ip}: {e}")
             await asyncio.sleep(1)
 
 async def tracert_loop(websocket: WebSocket, ip: str):
     """Traceroute를 수행하고 홉 정보를 전송한 후 각 홉에 대해 병렬 Ping 수행"""
+    if not TRACERT_CMD:
+        await websocket.send_json({"type": "tracert", "hops": [{"hop": 1, "ip": "Error", "ms": 0, "status": "traceroute command not found"}]})
+        return
+
     is_windows = platform.system().lower() == "windows"
     
     if is_windows:
@@ -102,11 +127,20 @@ async def tracert_loop(websocket: WebSocket, ip: str):
     else:
         cmd = ["traceroute", "-n", "-m", "30", "-w", "1", ip]
     
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+    except FileNotFoundError:
+        print(f"Error: Traceroute command not found at {TRACERT_CMD}. Please ensure it's in your PATH.")
+        await websocket.send_json({"type": "tracert", "hops": [{"hop": 1, "ip": "Error", "ms": 0, "status": "traceroute command not found"}]})
+        return
+    except Exception as e:
+        print(f"Error starting tracert subprocess for {ip}: {e}")
+        await websocket.send_json({"type": "tracert", "hops": [{"hop": 1, "ip": "Error", "ms": 0, "status": f"Error: Failed to start tracert ({e})"}]})
+        return
     
     hops = []
     hop_regex = re.compile(r"^\s*(\d+)\s+.*?\s+((?:\d{1,3}\.){3}\d{1,3})")
@@ -159,7 +193,8 @@ async def tracert_loop(websocket: WebSocket, ip: str):
                 await asyncio.sleep(1)
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception as e:
+                print(f"Hop ping loop general error for {hop_ip} (hop {hop_num}): {e}")
                 await asyncio.sleep(1)
 
     ping_tasks = [asyncio.create_task(hop_ping(h["ip"], h["hop"])) for h in hops]
@@ -172,17 +207,26 @@ async def tracert_loop(websocket: WebSocket, ip: str):
 
 @app.websocket("/ws/{ip}")
 async def websocket_endpoint(websocket: WebSocket, ip: str):
+    print(f"WebSocket connecting to IP: {ip}")
     await websocket.accept()
+    print(f"WebSocket accepted for IP: {ip}")
     
     ping_task = asyncio.create_task(ping_loop(websocket, ip))
     tracert_task = asyncio.create_task(tracert_loop(websocket, ip))
     
     try:
         while True:
-            await websocket.receive_text()
+            # 클라이언트로부터 메시지를 기다리거나 연결 유지를 위해 대기
+            data = await websocket.receive_text()
+            print(f"Received from client {ip}: {data}")
     except WebSocketDisconnect:
+        print(f"WebSocket disconnected for IP: {ip}")
+    except Exception as e:
+        print(f"WebSocket unexpected error for {ip}: {e}")
+    finally:
         ping_task.cancel()
         tracert_task.cancel()
+        print(f"Tasks cancelled for {ip}")
 
 if __name__ == "__main__":
     import uvicorn
