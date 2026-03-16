@@ -13,16 +13,33 @@ app = FastAPI()
 
 # index.html 제공
 # index.html 제공 및 헬스체크 (Render 지원)
-@app.get("/")
-@app.head("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def get_index():
     with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
-@app.get("/health")
-@app.head("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
     return {"status": "ok"}
+
+@app.get("/test-ping")
+async def test_ping():
+    cmd = ["ping", "-c", "1", "8.8.8.8"]
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        return {
+            "PING_CMD": PING_CMD,
+            "stdout": stdout.decode(errors="ignore"),
+            "stderr": stderr.decode(errors="ignore"),
+            "returncode": process.returncode
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 # 시스템 명령어 존재 여부 확인
 PING_CMD = shutil.which("ping")
