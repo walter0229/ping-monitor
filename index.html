@@ -751,8 +751,9 @@
                 console.error("WebSocket Error:", err);
             };
 
-            ws.onclose = () => {
-                console.log("WebSocket Closed");
+            ws.onclose = (event) => {
+                console.warn(`WebSocket Closed: code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean}`);
+                // Render 등에서 정기적인 재시작이나 헬스체크로 인해 끊길 수 있으므로 로그를 남김
                 stopMonitoring();
             };
         }

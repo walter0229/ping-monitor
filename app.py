@@ -11,12 +11,15 @@ import re
 app = FastAPI()
 
 # index.html 제공
+# index.html 제공 및 헬스체크 (Render 지원)
 @app.get("/")
-async def get():
+@app.head("/")
+async def get_index():
     with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
 @app.get("/health")
+@app.head("/health")
 async def health():
     return {"status": "ok"}
 
@@ -63,8 +66,9 @@ async def ping_loop(websocket: WebSocket, ip: str):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            stdout, _ = await process.communicate()
+            stdout, stderr = await process.communicate()
             output = stdout.decode("cp949" if is_windows else "utf-8", errors="ignore")
+            error_output = stderr.decode("cp949" if is_windows else "utf-8", errors="ignore")
             
             time_match = re.search(r"시간[=<]([0-9]+)ms|time[=<]([0-9]+)ms", output, re.IGNORECASE)
             
@@ -74,6 +78,8 @@ async def ping_loop(websocket: WebSocket, ip: str):
             else:
                 ms = 0
                 status = "Timeout"
+                if error_output:
+                    print(f"Ping Command Error: {error_output.strip()}")
             
             await websocket.send_json({
                 "type": "ping",
@@ -84,7 +90,7 @@ async def ping_loop(websocket: WebSocket, ip: str):
         except asyncio.CancelledError:
             break
         except Exception as e:
-            print("Ping error:", e)
+            print(f"Ping loop general error: {e}")
             await asyncio.sleep(1)
 
 async def tracert_loop(websocket: WebSocket, ip: str):
