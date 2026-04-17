@@ -111,63 +111,72 @@ async def get_ip_info(request: IPRequest):
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-async def ping_loop(websocket: WebSocket, ip: str, send_lock: asyncio.Lock):
-    """지속적으로 ping을 보내고 결과를 웹소켓으로 전송 (1초 간격)"""
-    if not PING_CMD:
+async def tcp_ping(ip: str, port: int, timeout: float = 2.0):
+    """TCP 연결 시간을 측정하여 지연 시간을 반환 (ms)"""
+    start_time = asyncio.get_event_loop().time()
+    try:
+        # 지정된 IP와 포트로의 연결 시도
+        reader, writer = await asyncio.wait_for(asyncio.open_connection(ip, port), timeout=timeout)
+        writer.close()
+        await writer.wait_closed()
+        end_time = asyncio.get_event_loop().time()
+        return int((end_time - start_time) * 1000), "Success"
+    except asyncio.TimeoutError:
+        return 0, "Timeout"
+    except Exception as e:
+        return 0, f"Error: {str(e)}"
+
+async def ping_loop(websocket: WebSocket, ip: str, send_lock: asyncio.Lock, mode: str = "icmp", port: int = 80):
+    """지속적으로 ping(ICMP 또는 TCP)을 보내고 결과를 웹소켓으로 전송"""
+    if mode == "icmp" and not PING_CMD:
         async with send_lock:
             await websocket.send_json({"type": "ping", "ms": 0, "status": "Error: ping command not found"})
         return
 
     while True:
         try:
-            is_windows = platform.system().lower() == "windows"
-            if is_windows:
-                cmd = ["ping", "-n", "1", "-w", "1000", ip]
+            if mode == "tcp":
+                ms, status = await tcp_ping(ip, port)
             else:
-                # 리눅스 환경에서는 -W가 초 단위임 (1 = 1초)
-                cmd = ["ping", "-c", "1", "-W", "1", ip]
-            
-            try:
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-            except FileNotFoundError:
-                print(f"Error: Ping command not found at {PING_CMD}. Please ensure it's in your PATH.")
-                await websocket.send_json({"type": "ping", "ms": 0, "status": "Error: ping command not found"})
-                break
-            except Exception as e:
-                print(f"Error starting ping subprocess for {ip}: {e}")
-                await websocket.send_json({"type": "ping", "ms": 0, "status": f"Error: Failed to start ping ({e})"})
-                break
-
-            stdout, stderr = await process.communicate()
-            output = stdout.decode("cp949" if is_windows else "utf-8", errors="ignore")
-            error_output = stderr.decode("cp949" if is_windows else "utf-8", errors="ignore")
-            
-            time_match = re.search(r"시간[=<]([0-9]+)ms|time[=<]([0-9]+)ms", output, re.IGNORECASE)
-            
-            if process.returncode == 0 and time_match:
-                ms = int(time_match.group(1) or time_match.group(2))
-                status = "Success"
-            else:
-                ms = 0
-                status = "Timeout"
-                if error_output:
-                    print(f"Ping Command Error for {ip}: {error_output.strip()}")
+                # 기존 ICMP 핑 로직
+                is_windows = platform.system().lower() == "windows"
+                if is_windows:
+                    cmd = ["ping", "-n", "1", "-w", "1000", ip]
+                else:
+                    cmd = ["ping", "-c", "1", "-W", "1", ip]
+                
+                try:
+                    process = await asyncio.create_subprocess_exec(
+                        *cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    stdout, stderr = await process.communicate()
+                    output = stdout.decode("cp949" if is_windows else "utf-8", errors="ignore")
+                    time_match = re.search(r"시간[=<]([0-9]+)ms|time[=<]([0-9]+)ms", output, re.IGNORECASE)
+                    
+                    if process.returncode == 0 and time_match:
+                        ms = int(time_match.group(1) or time_match.group(2))
+                        status = "Success"
+                    else:
+                        ms = 0
+                        status = "Timeout"
+                except Exception as e:
+                    ms = 0
+                    status = f"Error: {str(e)}"
             
             async with send_lock:
                 await websocket.send_json({
                     "type": "ping",
                     "ms": ms,
-                    "status": status
+                    "status": status,
+                    "mode": mode
                 })
             await asyncio.sleep(1)
         except asyncio.CancelledError:
             break
         except Exception as e:
-            print(f"Ping loop general error for {ip}: {e}")
+            print(f"Ping loop error: {e}")
             await asyncio.sleep(1)
 
 async def tracert_loop(websocket: WebSocket, ip: str, send_lock: asyncio.Lock):
@@ -267,13 +276,12 @@ async def tracert_loop(websocket: WebSocket, ip: str, send_lock: asyncio.Lock):
             t.cancel()
 
 @app.websocket("/ws/{ip}")
-async def websocket_endpoint(websocket: WebSocket, ip: str):
-    print(f"[WS] WebSocket connection attempt from: {websocket.client.host} for IP: {ip}")
+async def websocket_endpoint(websocket: WebSocket, ip: str, mode: str = "icmp", port: int = 80):
+    print(f"[WS] Connection for {ip} (mode: {mode}, port: {port})")
     await websocket.accept()
-    print(f"[WS] WebSocket connection accepted for IP: {ip}")
     
     send_lock = asyncio.Lock()
-    ping_task = asyncio.create_task(ping_loop(websocket, ip, send_lock))
+    ping_task = asyncio.create_task(ping_loop(websocket, ip, send_lock, mode, port))
     tracert_task = asyncio.create_task(tracert_loop(websocket, ip, send_lock))
     
     try:

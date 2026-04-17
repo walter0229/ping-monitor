@@ -158,29 +158,31 @@
     <div class="flex flex-col items-center text-center mt-4 mb-2">
         <h1 class="text-5xl md:text-6xl mb-2">
             <span class="fancy-title">EXANET</span>
-            <span class="header-subtitle ml-2 text-2xl md:text-3xl">Ping & Traceroute Monitor <span class="text-sm font-light opacity-50">v1.2.0</span></span>
+            <span class="header-subtitle ml-2 text-2xl md:text-3xl">Ping & Traceroute Monitor <span class="text-sm font-light opacity-50">v1.3.0</span></span>
         </h1>
         <p class="text-slate-400 text-sm tracking-widest uppercase font-medium">Professional Network Monitoring Pro Solutions</p>
     </div>
 
     <!-- 상단 입력 영역: IP 입력 및 드롭다운 -->
     <div class="glass-panel p-6 mb-8 relative z-50">
-        <div class="flex flex-col md:flex-row gap-4 items-center">
-            <div class="relative w-full md:w-64 group flex gap-2">
-                <div class="relative flex-grow">
-                    <div id="customDropdown" class="w-full bg-slate-800 border-2 border-slate-700 text-slate-300 px-4 py-4 rounded-xl focus-within:border-blue-500 outline-none transition-all cursor-pointer relative font-semibold tracking-wide shadow-lg group-hover:border-slate-600 flex justify-between items-center">
-                        <span id="dropdownSelectedText">Quick Select 🔽</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
-                    </div>
-                    <div id="dropdownContent" class="dropdown-content">
-                        <div class="dropdown-header">Default Presets</div>
-                        <div class="dropdown-item" onclick="selectIp('168.126.63.1', 'KT Kornet')" oncontextmenu="showContextMenu(event, '168.126.63.1', true)">KT Kornet (168.126.63.1)</div>
-                        <div class="dropdown-item" onclick="selectIp('210.220.163.82', 'SK Broadband')" oncontextmenu="showContextMenu(event, '210.220.163.82', true)">SK Broadband (210.220.163.82)</div>
-                        <div class="dropdown-item" onclick="selectIp('164.124.101.2', 'LG U+')" oncontextmenu="showContextMenu(event, '164.124.101.2', true)">LG U+ (164.124.101.2)</div>
-                        <div class="dropdown-item" onclick="selectIp('8.8.8.8', 'Google DNS')" oncontextmenu="showContextMenu(event, '8.8.8.8', true)">Google DNS (8.8.8.8)</div>
-                        <div class="dropdown-item" onclick="selectIp('1.1.1.1', 'Cloudflare')" oncontextmenu="showContextMenu(event, '1.1.1.1', true)">Cloudflare (1.1.1.1)</div>
-                        
-                        <div class="dropdown-header">My Custom IPs</div>
+        <div class="flex flex-col gap-6">
+            <!-- First Row: Target IP and Start Button -->
+            <div class="flex flex-col md:flex-row gap-4 items-center">
+                <div class="relative w-full md:w-64 group flex gap-2">
+                    <div class="relative flex-grow">
+                        <div id="customDropdown" class="w-full bg-slate-800 border-2 border-slate-700 text-slate-300 px-4 py-4 rounded-xl focus-within:border-blue-500 outline-none transition-all cursor-pointer relative font-semibold tracking-wide shadow-lg group-hover:border-slate-600 flex justify-between items-center">
+                            <span id="dropdownSelectedText">Quick Select 🔽</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                        </div>
+                        <div id="dropdownContent" class="dropdown-content">
+                            <div class="dropdown-header">Default Presets</div>
+                            <div class="dropdown-item" onclick="selectIp('168.126.63.1', 'KT Kornet')" oncontextmenu="showContextMenu(event, '168.126.63.1', true)">KT Kornet (168.126.63.1)</div>
+                            <div class="dropdown-item" onclick="selectIp('210.220.163.82', 'SK Broadband')" oncontextmenu="showContextMenu(event, '210.220.163.82', true)">SK Broadband (210.220.163.82)</div>
+                            <div class="dropdown-item" onclick="selectIp('164.124.101.2', 'LG U+')" oncontextmenu="showContextMenu(event, '164.124.101.2', true)">LG U+ (164.124.101.2)</div>
+                            <div class="dropdown-item" onclick="selectIp('8.8.8.8', 'Google DNS')" oncontextmenu="showContextMenu(event, '8.8.8.8', true)">Google DNS (8.8.8.8)</div>
+                            <div class="dropdown-item" onclick="selectIp('1.1.1.1', 'Cloudflare')" oncontextmenu="showContextMenu(event, '1.1.1.1', true)">Cloudflare (1.1.1.1)</div>
+                            
+                            <div class="dropdown-header">My Custom IPs</div>
                         <div id="customIpItems">
                             <!-- Custom IPs inserted here -->
                         </div>
@@ -203,6 +205,25 @@
                     class="w-full md:w-48 bg-[#FFD700] hover:bg-[#FFC000] text-black font-bold py-4 rounded-xl transition-all shadow-lg shadow-yellow-500/20 text-lg flex items-center justify-center gap-2 border-b-4 border-[#B8860B] active:border-b-0 active:translate-y-1">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Monitoring 시작
             </button>
+            </div>
+            
+            <!-- Second Row: Mode Selection and Port -->
+            <div class="flex flex-col md:flex-row gap-4 items-center pt-4 border-t border-slate-700/50">
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <span class="text-slate-400 text-sm font-semibold uppercase tracking-wider">Ping 모드:</span>
+                    <select id="pingMode" onchange="togglePortInput()" class="bg-slate-800 border-2 border-slate-700 text-white px-4 py-2 rounded-lg focus:border-blue-500 outline-none transition-all cursor-pointer">
+                        <option value="icmp">Standard (ICMP)</option>
+                        <option value="tcp">Advanced (TCP Conn)</option>
+                    </select>
+                </div>
+                <div id="portInputContainer" class="flex items-center gap-3 w-full md:w-auto opacity-50 pointer-events-none transition-all">
+                    <span class="text-slate-400 text-sm font-semibold uppercase tracking-wider">포트:</span>
+                    <input type="number" id="pingPort" value="80" placeholder="80" 
+                        class="w-24 bg-slate-800 border-2 border-slate-700 text-white px-4 py-2 rounded-lg focus:border-blue-500 outline-none transition-all">
+                </div>
+                <div class="flex-grow"></div>
+                <div class="text-[10px] text-slate-500 italic">* 클라우드 환경에서는 'Advanced (TCP)' 모드를 권장합니다.</div>
+            </div>
         </div>
     </div>
 
@@ -753,6 +774,9 @@
             const ip = document.getElementById('ipInput').value.trim();
             if (!ip) return;
 
+            const mode = document.getElementById('pingMode').value;
+            const port = document.getElementById('pingPort').value || 80;
+
             // 1. 통계 초기화 먼저 수행
             resetStats();
             // 2. 새로운 세션 시간 기록
@@ -772,10 +796,10 @@
             document.getElementById('tracertTbody').innerHTML = '';
 
             isManualStop = false;
-            connectWebSocket(ip);
+            connectWebSocket(ip, mode, port);
         }
 
-        function connectWebSocket(ip) {
+        function connectWebSocket(ip, mode, port) {
             if (ws) {
                 ws.onclose = null;
                 ws.close();
@@ -784,7 +808,7 @@
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host || '127.0.0.1:8000';
             const encodedIp = encodeURIComponent(ip);
-            ws = new WebSocket(`${protocol}//${host}/ws/${encodedIp}`);
+            ws = new WebSocket(`${protocol}//${host}/ws/${encodedIp}?mode=${mode}&port=${port}`);
             
             ws.onopen = () => {
                 console.log("WebSocket connected successfully");
@@ -832,6 +856,16 @@
             btn.classList.remove('bg-red-600', 'hover:bg-red-500', 'shadow-red-500/30', 'border-b-4', 'border-red-800', 'active:border-b-0', 'active:translate-y-1', 'text-white');
             btn.classList.add('bg-[#FFD700]', 'hover:bg-[#FFC000]', 'shadow-yellow-500/20', 'border-b-4', 'border-[#B8860B]', 'active:border-b-0', 'active:translate-y-1', 'text-black');
             btn.onclick = toggleMonitoring;
+        }
+
+        function togglePortInput() {
+            const mode = document.getElementById('pingMode').value;
+            const container = document.getElementById('portInputContainer');
+            if (mode === 'tcp') {
+                container.classList.remove('opacity-50', 'pointer-events-none');
+            } else {
+                container.classList.add('opacity-50', 'pointer-events-none');
+            }
         }
     </script>
 </body>
