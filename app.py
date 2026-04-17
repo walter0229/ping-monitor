@@ -24,17 +24,15 @@ def resource_path(relative_path):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Only open browser if not running in a container or cloud environment
-    is_cloud = os.environ.get("DOCKER_CONTAINER") or os.environ.get("RENDER") or os.environ.get("RAILWAY")
-    if not is_cloud:
-        port = int(os.environ.get("PORT", 8000))
-        url = f"http://127.0.0.1:{port}"
-        print(f"==================================================")
-        print(f"🚀 EXANET Ping Monitor Pro is starting!")
-        print(f"🌐 Opening browser at: {url}")
-        print(f"==================================================")
-        # Give the server a little more time to initialize
-        Timer(2.5, lambda: webbrowser.open(url)).start()
+    # Standard local startup: always try to open browser
+    port = int(os.environ.get("PORT", 8000))
+    url = f"http://127.0.0.1:{port}"
+    print(f"==================================================")
+    print(f"🚀 EXANET Ping Monitor Pro is starting!")
+    print(f"🌐 Opening browser at: {url}")
+    print(f"==================================================")
+    # Give the server a little more time to initialize
+    Timer(2.5, lambda: webbrowser.open(url)).start()
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -76,16 +74,6 @@ print(f"System Check: PING_CMD={PING_CMD}, TRACERT_CMD={TRACERT_CMD}")
 
 class IPRequest(BaseModel):
     ip: str
-
-class VerifyRequest(BaseModel):
-    password: str
-
-@app.post("/api/verify_password")
-async def verify_password(request: VerifyRequest):
-    # Password set to 0320 per user request
-    if request.password == "0320":
-        return {"success": True}
-    return {"success": False}
 
 @app.post("/api/ipinfo")
 async def get_ip_info(request: IPRequest):

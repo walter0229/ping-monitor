@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EXEANET Mobile Pro - Local Quality Check</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Outfit', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; }
+        .fancy-title { background: linear-gradient(135deg, #FFD700, #FFA500); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 900; }
+        .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        canvas { filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.2)); }
+    </style>
+</head>
+<body class="min-h-screen p-4 flex flex-col gap-4">
+    <!-- Header -->
+    <div class="text-center py-4">
+        <h1 class="text-3xl"><span class="fancy-title lowercase">exanet</span> <span class="text-white font-bold">Mobile Solo</span></h1>
+        <p class="text-[10px] text-slate-500 tracking-widest uppercase mt-1">Independent Site Connectivity Monitor v1.4.0</p>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-2 gap-3">
+        <div class="glass-panel p-4 text-center">
+            <div class="text-slate-400 text-[10px] uppercase mb-1">Current Latency</div>
+            <div id="currentMs" class="text-3xl font-bold text-emerald-400">-- <span class="text-sm font-normal text-slate-500">ms</span></div>
+        </div>
+        <div class="glass-panel p-4 text-center">
+            <div class="text-slate-400 text-[10px] uppercase mb-1">Average</div>
+            <div id="avgMs" class="text-3xl font-bold text-blue-400">--</div>
+        </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="glass-panel p-4 flex-grow">
+        <div class="flex justify-between items-center mb-4">
+            <span class="text-xs font-bold text-slate-400">LIVE STABILITY GRAPH</span>
+            <div id="statusDot" class="w-2 h-2 rounded-full bg-slate-600"></div>
+        </div>
+        <div class="relative h-48 w-full">
+            <canvas id="pingChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Control Area -->
+    <div class="glass-panel p-6 flex flex-col gap-4">
+        <div class="flex flex-col gap-1">
+            <label class="text-[10px] text-slate-400 font-bold ml-1">TARGET NODE (KOREA)</label>
+            <input type="text" id="targetUrl" value="https://www.google.co.kr/generate_204" 
+                class="w-full bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl focus:border-yellow-500 outline-none transition-all text-sm font-mono">
+        </div>
+        
+        <button id="startBtn" onclick="toggleMonitor()" 
+            class="w-full bg-[#FFD700] hover:bg-[#FFC000] text-black font-black py-4 rounded-2xl transition-all shadow-lg active:scale-95 text-lg">
+            START MONITORING
+        </button>
+        
+        <p class="text-[9px] text-slate-500 text-center px-4 leading-relaxed">
+            * 이 도구는 서버 없이 휴대폰에서 독립적으로 작동합니다.<br>
+            브라우저 제약 상 ICMP 대신 <b>HTTP Latency</b>를 측정하며,<br>
+            현재 연결된 망의 한국 접속 품질을 체크하기에 적합합니다.
+        </p>
+    </div>
+
+    <!-- Detailed Stats -->
+    <div class="grid grid-cols-3 gap-2">
+        <div class="glass-panel p-2 text-center">
+            <div class="text-[8px] text-slate-500">MAX</div>
+            <div id="maxMs" class="text-sm font-bold">--</div>
+        </div>
+        <div class="glass-panel p-2 text-center">
+            <div class="text-[8px] text-slate-500">MIN</div>
+            <div id="minMs" class="text-sm font-bold">--</div>
+        </div>
+        <div class="glass-panel p-2 text-center">
+            <div class="text-[8px] text-slate-500">LOSS</div>
+            <div id="lossPercent" class="text-sm font-bold">--</div>
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        let chart;
+        let samples = [];
+        let stats = { sent: 0, received: 0, sum: 0, max: 0, min: Infinity };
+
+        // Initialize Chart
+        const ctx = document.getElementById('pingChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(30).fill(''),
+                datasets: [{
+                    label: 'Latency (ms)',
+                    data: Array(30).fill(null),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { display: false },
+                    y: { 
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#64748b', font: { size: 10 } }
+                    }
+                },
+                animation: { duration: 400 }
+            }
+        });
+
+        async function measure() {
+            if (!isRunning) return;
+
+            const url = document.getElementById('targetUrl').value;
+            const startTime = performance.now();
+            stats.sent++;
+
+            try {
+                // Cache busting parameter
+                const target = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+                const response = await fetch(target, { mode: 'no-cors', cache: 'no-store' });
+                const endTime = performance.now();
+                const latency = Math.round(endTime - startTime);
+
+                stats.received++;
+                stats.sum += latency;
+                stats.max = Math.max(stats.max, latency);
+                stats.min = Math.min(stats.min, latency);
+
+                updateUI(latency);
+            } catch (error) {
+                console.error("Ping Error:", error);
+                updateUI(null); // Loss
+            }
+
+            if (isRunning) setTimeout(measure, 1000);
+        }
+
+        function updateUI(latency) {
+            const currentEl = document.getElementById('currentMs');
+            const avgEl = document.getElementById('avgMs');
+            const maxEl = document.getElementById('maxMs');
+            const minEl = document.getElementById('minMs');
+            const lossEl = document.getElementById('lossPercent');
+            const dot = document.getElementById('statusDot');
+
+            if (latency !== null) {
+                currentEl.innerHTML = `${latency} <span class="text-sm font-normal text-slate-500">ms</span>`;
+                dot.className = "w-2 h-2 rounded-full bg-emerald-500 pulse";
+            } else {
+                currentEl.innerHTML = `<span class="text-rose-500">LOSS</span>`;
+                dot.className = "w-2 h-2 rounded-full bg-rose-600";
+            }
+
+            const avg = stats.received > 0 ? Math.round(stats.sum / stats.received) : 0;
+            const loss = Math.round(((stats.sent - stats.received) / stats.sent) * 100);
+
+            avgEl.innerText = avg;
+            maxEl.innerText = stats.max + 'ms';
+            minEl.innerText = (stats.min === Infinity ? 0 : stats.min) + 'ms';
+            lossEl.innerText = loss + '%';
+
+            // Update Chart
+            chart.data.datasets[0].data.shift();
+            chart.data.datasets[0].data.push(latency);
+            chart.update();
+        }
+
+        function toggleMonitor() {
+            const btn = document.getElementById('startBtn');
+            if (isRunning) {
+                isRunning = false;
+                btn.innerText = "START MONITORING";
+                btn.className = "w-full bg-[#FFD700] hover:bg-[#FFC000] text-black font-black py-4 rounded-2xl transition-all shadow-lg active:scale-95 text-lg";
+                document.getElementById('statusDot').className = "w-2 h-2 rounded-full bg-slate-600";
+            } else {
+                isRunning = true;
+                stats = { sent: 0, received: 0, sum: 0, max: 0, min: Infinity };
+                btn.innerText = "STOP MONITORING";
+                btn.className = "w-full bg-rose-600 hover:bg-rose-500 text-white font-black py-4 rounded-2xl transition-all shadow-lg active:scale-95 text-lg";
+                measure();
+            }
+        }
+    </script>
+</body>
+</html>
