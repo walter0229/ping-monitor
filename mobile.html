@@ -49,18 +49,18 @@
     <!-- Control Area -->
     <div class="glass-panel p-6 flex flex-col gap-4">
         <div class="flex flex-col gap-2">
-            <label class="text-[10px] text-slate-400 font-bold ml-1">PRESET NODES (HTTPS REQUIRED)</label>
+            <label class="text-[10px] text-slate-400 font-bold ml-1">PRESET NODES</label>
             <select id="nodePreset" onchange="updateTarget()" 
                 class="w-full bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl focus:border-yellow-500 outline-none transition-all text-sm mb-2">
-                <option value="https://www.google.co.kr/generate_204">KT/Korea (via Google KR)</option>
-                <option value="https://www.google.com/generate_204">Global (via Google DNS)</option>
-                <option value="https://vnpt.com.vn/favicon.ico">VNPT Vietnam (Official Site)</option>
-                <option value="https://cmc.com.vn/favicon.ico">CMC Vietnam (Official Site)</option>
-                <option value="https://fpt.vn/favicon.ico">FPT Vietnam (Official Site)</option>
+                <option value="168.126.63.1">KT (168.126.63.1)</option>
+                <option value="8.8.8.8">Google (8.8.8.8)</option>
+                <option value="45.122.241.150">CMC (45.122.241.150)</option>
+                <option value="14.238.156.222">VNPT (14.238.156.222)</option>
+                <option value="https://www.google.co.kr/generate_204">KOREA (Web Proxy Mode)</option>
             </select>
             
-            <label class="text-[10px] text-slate-400 font-bold ml-1">TARGET NODE URL (HTTPS)</label>
-            <input type="text" id="targetUrl" value="https://www.google.co.kr/generate_204" 
+            <label class="text-[10px] text-slate-400 font-bold ml-1">TARGET IP or URL</label>
+            <input type="text" id="targetUrl" value="168.126.63.1" 
                 class="w-full bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl focus:border-yellow-500 outline-none transition-all text-sm font-mono">
         </div>
         
@@ -161,13 +161,22 @@
         async function measure() {
             if (!isRunning) return;
 
-            const url = document.getElementById('targetUrl').value;
+            let url = document.getElementById('targetUrl').value.trim();
+            
+            // 스마트 프로토콜 처리
+            if (!url.startsWith('http')) {
+                // IP나 도메인만 입력한 경우 현재 페이지의 프로토콜을 따름
+                const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+                url = `${protocol}//${url}`;
+            }
+
             const startTime = performance.now();
             stats.sent++;
 
             try {
                 // Cache busting parameter
-                const target = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+                const separator = url.includes('?') ? '&' : '?';
+                const target = `${url}${separator}t=${Date.now()}`;
                 const response = await fetch(target, { mode: 'no-cors', cache: 'no-store' });
                 const endTime = performance.now();
                 const latency = Math.round(endTime - startTime);
