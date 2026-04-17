@@ -18,9 +18,14 @@
 </head>
 <body class="min-h-screen p-4 flex flex-col gap-4">
     <!-- Header -->
-    <div class="text-center py-4">
+    <div class="text-center py-4 flex flex-col items-center gap-2">
         <h1 class="text-3xl"><span class="fancy-title lowercase">exanet</span> <span class="text-white font-bold">Mobile Solo</span></h1>
-        <p class="text-[10px] text-slate-500 tracking-widest uppercase mt-1">Standalone Network Monitor v2.0.0</p>
+        <p class="text-[10px] text-slate-500 tracking-widest uppercase">Standalone Network Monitor v2.1.0</p>
+        
+        <!-- Quick Download Button for Offline Mode -->
+        <button onclick="downloadSelf()" class="mt-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[9px] font-bold px-4 py-2 rounded-full border border-emerald-500/30 transition-all flex items-center gap-2">
+            <span>💾 DOWNLOAD FOR OFFLINE (IP PING MODE)</span>
+        </button>
     </div>
 
     <!-- Stats Row -->
@@ -301,6 +306,20 @@
         function updateTarget() {
             const preset = document.getElementById('nodePreset');
             document.getElementById('targetUrl').value = preset.value;
+        }
+
+        function downloadSelf() {
+            const html = document.documentElement.outerHTML;
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'EXEANET_Mobile_Solo.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            alert("💾 파일이 저장되었습니다.\n\n[파일] 또는 [내 파일] 앱에서 방금 받은 'EXEANET_Mobile_Solo.html'을 열어주시면 인터넷 보안 제약 없이 IP 측정이 가능합니다.");
         }
     </script>
 </body>
