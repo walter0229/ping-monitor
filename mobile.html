@@ -48,9 +48,19 @@
 
     <!-- Control Area -->
     <div class="glass-panel p-6 flex flex-col gap-4">
-        <div class="flex flex-col gap-1">
-            <label class="text-[10px] text-slate-400 font-bold ml-1">TARGET NODE (KOREA)</label>
-            <input type="text" id="targetUrl" value="https://www.google.co.kr/generate_204" 
+        <div class="flex flex-col gap-2">
+            <label class="text-[10px] text-slate-400 font-bold ml-1">PRESET NODES</label>
+            <select id="nodePreset" onchange="updateTarget()" 
+                class="w-full bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl focus:border-yellow-500 outline-none transition-all text-sm mb-2">
+                <option value="http://168.126.63.1">KT (168.126.63.1) - Default</option>
+                <option value="http://8.8.8.8">Google (8.8.8.8)</option>
+                <option value="http://45.122.241.150">CMC (45.122.241.150)</option>
+                <option value="http://14.238.156.222">VNPT (14.238.156.222)</option>
+                <option value="https://www.google.co.kr/generate_204">KOREA (Web Proxy - Accurate)</option>
+            </select>
+            
+            <label class="text-[10px] text-slate-400 font-bold ml-1">TARGET NODE URL/IP</label>
+            <input type="text" id="targetUrl" value="http://168.126.63.1" 
                 class="w-full bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl focus:border-yellow-500 outline-none transition-all text-sm font-mono">
         </div>
         
@@ -262,6 +272,11 @@
 
         function closeReport() {
             document.getElementById('reportModal').style.display = 'none';
+        }
+
+        function updateTarget() {
+            const preset = document.getElementById('nodePreset');
+            document.getElementById('targetUrl').value = preset.value;
         }
     </script>
 </body>
