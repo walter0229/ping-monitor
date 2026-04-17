@@ -20,7 +20,7 @@
     <!-- Header -->
     <div class="text-center py-4">
         <h1 class="text-3xl"><span class="fancy-title lowercase">exanet</span> <span class="text-white font-bold">Mobile Solo</span></h1>
-        <p class="text-[10px] text-slate-500 tracking-widest uppercase mt-1">Independent Site Connectivity Monitor v1.4.0</p>
+        <p class="text-[10px] text-slate-500 tracking-widest uppercase mt-1">Standalone Network Monitor v2.0.0</p>
     </div>
 
     <!-- Stats Row -->
@@ -49,29 +49,30 @@
     <!-- Control Area -->
     <div class="glass-panel p-6 flex flex-col gap-4">
         <div class="flex flex-col gap-2">
-            <label class="text-[10px] text-slate-400 font-bold ml-1">SELECT TARGET NODE</label>
+            <label class="text-[10px] text-slate-400 font-bold ml-1 uppercase">Select Preset Node</label>
             <select id="nodePreset" onchange="updateTarget()" 
-                class="w-full bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl focus:border-yellow-500 outline-none transition-all text-sm mb-2">
+                class="w-full bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl focus:border-yellow-500 outline-none transition-all text-sm mb-2 font-bold">
                 <option value="168.126.63.1">KT (168.126.63.1)</option>
                 <option value="8.8.8.8">Google (8.8.8.8)</option>
                 <option value="45.122.241.150">CMC (45.122.241.150)</option>
                 <option value="14.238.156.222">VNPT (14.238.156.222)</option>
             </select>
             
-            <label class="text-[10px] text-slate-400 font-bold ml-1">TARGET IP ADDRESS</label>
+            <label class="text-[10px] text-slate-400 font-bold ml-1 uppercase">Target IP Address</label>
             <input type="text" id="targetUrl" value="168.126.63.1" 
-                class="w-full bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl focus:border-yellow-500 outline-none transition-all text-sm font-mono leading-none">
+                class="w-full bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl focus:border-yellow-500 outline-none transition-all text-sm font-mono tracking-tight">
         </div>
         
         <button id="startBtn" onclick="toggleMonitor()" 
             class="w-full bg-[#FFD700] hover:bg-[#FFC000] text-black font-black py-4 rounded-2xl transition-all shadow-lg active:scale-95 text-lg">
             START MONITORING
         </button>
-        
-        <p class="text-[9px] text-slate-500 text-center px-4 leading-relaxed">
-            * 이 도구는 휴대폰 브라우저에서 독립적으로 네트워크 지연 시간을 측정합니다.
-        </p>
     </div>
+
+    <!-- Info -->
+    <p class="text-[9px] text-slate-600 text-center uppercase tracking-widest font-bold">
+        Professional Independent Tool (Offline Optimized)
+    </p>
 
     <!-- Detailed Stats -->
     <div class="grid grid-cols-3 gap-2">
@@ -158,36 +159,53 @@
         async function measure() {
             if (!isRunning) return;
 
-            let url = document.getElementById('targetUrl').value.trim();
+            let target = document.getElementById('targetUrl').value.trim();
             
-            // 스마트 프로토콜 처리
-            if (!url.startsWith('http')) {
-                // IP나 도메인만 입력한 경우 현재 페이지의 프로토콜을 따름
-                const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-                url = `${protocol}//${url}`;
+            // 프로토콜 보정 (이미지 핑용)
+            if (!target.startsWith('http')) {
+                // 숫자로 된 IP는 기본적으로 http:// 사용
+                target = `http://${target}`;
             }
 
             const startTime = performance.now();
             stats.sent++;
 
-            try {
-                // Cache busting parameter
-                const separator = url.includes('?') ? '&' : '?';
-                const target = `${url}${separator}t=${Date.now()}`;
-                const response = await fetch(target, { mode: 'no-cors', cache: 'no-store' });
+            // Image Ping (브라우저 보안 제약을 피하기 위한 대체 기법)
+            const img = new Image();
+            const timeout = 2500;
+            let resolved = false;
+
+            const handleResult = (success) => {
+                if (resolved) return;
+                resolved = true;
+                
                 const endTime = performance.now();
                 const latency = Math.round(endTime - startTime);
 
-                stats.received++;
-                stats.sum += latency;
-                stats.max = Math.max(stats.max, latency);
-                stats.min = Math.min(stats.min, latency);
+                // 이미지 로드 실패(onerror)라도 응답이 온 것이므로 네트워크 지연 시간으로 간주
+                if (success || latency < timeout) {
+                    stats.received++;
+                    stats.sum += latency;
+                    stats.max = Math.max(stats.max, latency);
+                    stats.min = Math.min(stats.min, latency);
+                    updateUI(latency);
+                } else {
+                    updateUI(null);
+                }
+            };
 
-                updateUI(latency);
-            } catch (error) {
-                console.error("Ping Error:", error);
-                updateUI(null); // Loss
-            }
+            img.onload = () => handleResult(true);
+            img.onerror = () => handleResult(true); 
+            
+            img.src = `${target}/${Date.now()}.jpg`; // 캐시 방지용 난수 추가
+
+            // 타임아웃 처리
+            setTimeout(() => {
+                if (!resolved) {
+                    resolved = true;
+                    updateUI(null); // LOSS
+                }
+            }, timeout);
 
             if (isRunning) setTimeout(measure, 1000);
         }
