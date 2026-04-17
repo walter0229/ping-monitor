@@ -132,13 +132,33 @@
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@900&display=swap" rel="stylesheet">
 </head>
-<body class="min-h-screen p-6 flex flex-col gap-6">
+<body class="min-h-screen p-6 flex flex-col gap-6 overflow-hidden">
+
+    <!-- Password Protection Modal -->
+    <div id="passwordModal" class="fixed inset-0 bg-slate-950 z-[999] flex items-center justify-center backdrop-blur-2xl">
+        <div class="glass-panel p-10 max-w-sm w-full text-center border-2 border-slate-700 shadow-2xl">
+            <div class="mb-6 flex justify-center">
+                <div class="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center border border-yellow-500/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                </div>
+            </div>
+            <h2 class="text-3xl font-bold mb-2 fancy-title">EXANET Access</h2>
+            <p class="text-slate-400 mb-8 text-sm">Please enter access code to continue</p>
+            <input type="password" id="accessCode" placeholder="••••" 
+                class="w-full bg-slate-800 border-2 border-slate-700 text-white px-6 py-4 rounded-xl focus:border-yellow-500 outline-none transition-all font-mono text-center text-2xl tracking-[0.5em] mb-6 shadow-inner"
+                onkeypress="if(event.key==='Enter') checkAccess()">
+            <button onclick="checkAccess()" class="w-full bg-[#FFD700] hover:bg-[#FFC000] text-black font-bold py-4 rounded-xl transition-all shadow-lg shadow-yellow-500/20 active:scale-[0.98] border-b-4 border-[#B8860B] active:border-b-0">
+                Unlock Monitor
+            </button>
+            <p id="errorMsg" class="text-rose-500 mt-6 text-sm hidden font-semibold bg-rose-500/10 py-2 rounded-lg">Invalid Password. Please try again.</p>
+        </div>
+    </div>
 
     <!-- Header Title Area -->
     <div class="flex flex-col items-center text-center mt-4 mb-2">
         <h1 class="text-5xl md:text-6xl mb-2">
             <span class="fancy-title">EXANET</span>
-            <span class="header-subtitle ml-2 text-2xl md:text-3xl">Ping & Trace route Moniter</span>
+            <span class="header-subtitle ml-2 text-2xl md:text-3xl">Ping & Traceroute Monitor <span class="text-sm font-light opacity-50">v1.2.0</span></span>
         </h1>
         <p class="text-slate-400 text-sm tracking-widest uppercase font-medium">Professional Network Monitoring Pro Solutions</p>
     </div>
@@ -330,10 +350,32 @@
     </div>
 
     <script>
+        // Access Protection
+        async function checkAccess() {
+            const pwd = document.getElementById('accessCode').value;
+            const res = await fetch('/api/verify_password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pwd })
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('passwordModal').style.display = 'none';
+                document.body.classList.remove('overflow-hidden');
+            } else {
+                const err = document.getElementById('errorMsg');
+                err.classList.remove('hidden');
+                document.getElementById('accessCode').value = '';
+                document.getElementById('accessCode').focus();
+            }
+        }
+
         let ws = null;
         let pingChart;
         let chartData = { labels: [], datasets: [{ label: 'Ping (ms)', data: [], borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)', borderWidth: 2, tension: 0.4, fill: true }] };
         let stats = { sent: 0, received: 0, max: -Infinity, min: Infinity, sum: 0, startTime: null, endTime: null, sourceIp: 'Detecting...' };
+        let reconnectTimeout = null;
+        let isManualStop = false;
 
         function resetStats() {
             // 시간 정보는 유지하고 통계 데이터만 초기화
@@ -484,6 +526,8 @@
         }
 
         function stopMonitoring() {
+            isManualStop = true;
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
             if (ws) {
                 ws.onclose = null;
                 ws.close();
@@ -722,19 +766,36 @@
             btn.classList.add('bg-red-600', 'hover:bg-red-500', 'shadow-red-500/30', 'border-red-800', 'text-white');
             btn.onclick = toggleMonitoring;
 
+            // 새 세션 시작 시에만 초기화
             fetchIpInfo(ip);
             chartData.labels = []; chartData.datasets[0].data = [];
             document.getElementById('tracertTbody').innerHTML = '';
-            
+
+            isManualStop = false;
+            connectWebSocket(ip);
+        }
+
+        function connectWebSocket(ip) {
             if (ws) {
-                ws.onclose = null; // 이전 핸들러 제거로 시작 버튼 복구 방지
+                ws.onclose = null;
                 ws.close();
             }
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host || '127.0.0.1:8000';
-            ws = new WebSocket(`${protocol}//${host}/ws/${ip}`);
+            const encodedIp = encodeURIComponent(ip);
+            ws = new WebSocket(`${protocol}//${host}/ws/${encodedIp}`);
             
+            ws.onopen = () => {
+                console.log("WebSocket connected successfully");
+                if (reconnectTimeout) clearTimeout(reconnectTimeout);
+                // UI를 '정지' 상태로 유지/복구
+                const btn = document.getElementById('startBtn');
+                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg> Monitoring 정지`;
+                btn.classList.remove('bg-[#FFD700]', 'hover:bg-[#FFC000]');
+                btn.classList.add('bg-red-600', 'hover:bg-red-500', 'text-white');
+            };
+
             ws.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
                 if (msg.type === 'ping') {
@@ -753,9 +814,24 @@
 
             ws.onclose = (event) => {
                 console.warn(`WebSocket Closed: code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean}`);
-                // Render 등에서 정기적인 재시작이나 헬스체크로 인해 끊길 수 있으므로 로그를 남김
-                stopMonitoring();
+                if (!isManualStop) {
+                    console.log("Attempting to reconnect in 2 seconds...");
+                    // UI에 재연결 중임을 표시
+                    const btn = document.getElementById('startBtn');
+                    btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 재연결 중...`;
+                    reconnectTimeout = setTimeout(() => connectWebSocket(ip), 2000);
+                } else {
+                    stopMonitoringUI();
+                }
             };
+        }
+
+        function stopMonitoringUI() {
+            const btn = document.getElementById('startBtn');
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Monitoring 시작`;
+            btn.classList.remove('bg-red-600', 'hover:bg-red-500', 'shadow-red-500/30', 'border-b-4', 'border-red-800', 'active:border-b-0', 'active:translate-y-1', 'text-white');
+            btn.classList.add('bg-[#FFD700]', 'hover:bg-[#FFC000]', 'shadow-yellow-500/20', 'border-b-4', 'border-[#B8860B]', 'active:border-b-0', 'active:translate-y-1', 'text-black');
+            btn.onclick = toggleMonitoring;
         }
     </script>
 </body>

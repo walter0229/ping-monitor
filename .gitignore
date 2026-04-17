@@ -7,3 +7,9 @@ uv.zip
 uvw.exe
 uvx.exe
 수정사항/
+build/
+dist/
+*.spec
+.vscode/
+.idea/
+.DS_Store
