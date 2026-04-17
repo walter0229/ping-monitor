@@ -186,9 +186,29 @@
                 btn.innerText = "START MONITORING";
                 btn.className = "w-full bg-[#FFD700] hover:bg-[#FFC000] text-black font-black py-4 rounded-2xl transition-all shadow-lg active:scale-95 text-lg";
                 document.getElementById('statusDot').className = "w-2 h-2 rounded-full bg-slate-600";
+                
+                // 결과 리포트 출력
+                const avg = stats.received > 0 ? Math.round(stats.sum / stats.received) : 0;
+                const loss = Math.round(((stats.sent - stats.received) / stats.sent) * 100);
+                setTimeout(() => {
+                    alert(`📊 측정 결과 리포트\n\n- 보낸 패킷: ${stats.sent}\n- 받은 패킷: ${stats.received}\n- 손실률: ${loss}%\n- 평균 지연: ${avg}ms\n- 최대 지연: ${stats.max}ms`);
+                }, 100);
             } else {
+                // 데이터 초기화
                 isRunning = true;
                 stats = { sent: 0, received: 0, sum: 0, max: 0, min: Infinity };
+                
+                // 차트 초기화
+                chart.data.datasets[0].data = Array(30).fill(null);
+                chart.update();
+
+                // UI 초기화
+                document.getElementById('currentMs').innerHTML = `-- <span class="text-sm font-normal text-slate-500">ms</span>`;
+                document.getElementById('avgMs').innerText = '--';
+                document.getElementById('maxMs').innerText = '--';
+                document.getElementById('minMs').innerText = '--';
+                document.getElementById('lossPercent').innerText = '--';
+
                 btn.innerText = "STOP MONITORING";
                 btn.className = "w-full bg-rose-600 hover:bg-rose-500 text-white font-black py-4 rounded-2xl transition-all shadow-lg active:scale-95 text-lg";
                 measure();
